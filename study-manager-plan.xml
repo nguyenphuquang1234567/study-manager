@@ -1,734 +1,118 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Study Manager - CSDS 237 Final Project Plan
-  Based on the team's proposal (Study Manager, Quang Nguyen and Ronald Han)
-  and checked against every requirement in "CSDS 237 Final Project Instructions".
--->
-<projectPlan course="CSDS 237" version="1.0" created="2026-11-26">
+<projectPlan title="Study Manager" course="CSDS 237" due="2026-12-01, end of day">
 
-  <!-- ============================================================ -->
-  <!-- 1. OVERVIEW                                                   -->
-  <!-- ============================================================ -->
-  <overview>
-    <title>Study Manager</title>
-    <team size="2">
-      <member id="QN">Quang Nguyen</member>
-      <member id="RH">Ronald Han</member>
-    </team>
-    <deadlines>
-      <deadline type="proposal" date="2026-10-13" status="submitted"/>
-      <deadline type="final" date="2026-12-01" time="end of day" status="upcoming"/>
-      <deadline type="presentation" status="none"/>
-    </deadlines>
-    <purpose>
-      Many students struggle to manage their study time and to understand how their study
-      habits relate to academic performance. Study Manager lets students log study hours per
-      course, log quiz and exam grades, view statistics about their habits, and get a predicted
-      score for an upcoming quiz or exam based on how many hours they have studied.
-    </purpose>
-    <intendedUsers>
-      Students who want to track their study hours and understand how those hours relate to
-      their quiz and exam results.
-    </intendedUsers>
-    <scopeNote>
-      Two-person team: the base scope in this plan is sufficient. The instructions favor a
-      smaller application that works reliably over an ambitious one with incomplete features,
-      so anything marked "stretch" is cut first if time runs short.
-    </scopeNote>
-  </overview>
+  <!-- ===================== QUANG NGUYEN: P1-P3 ===================== -->
 
-  <!-- ============================================================ -->
-  <!-- 2. USER FEATURES (taken directly from the proposal)           -->
-  <!-- ============================================================ -->
-  <userFeatures>
-    <feature id="F1" source="proposal">Log how many hours they studied for a course (date, course, hours, optional note).</feature>
-    <feature id="F2" source="proposal">Track study time per course: table of sessions filterable by course, totals per course and per week.</feature>
-    <feature id="F3" source="proposal">Log quiz and exam grades (date, course, type, name, score 0-100).</feature>
-    <feature id="F4" source="proposal">View statistics: total hours, number of sessions, average session length, average score per course, hours-vs-score correlation, charts.</feature>
-    <feature id="F5" source="proposal">View a predicted score for an upcoming quiz or exam from the number of hours studied, with the regression statistics behind it.</feature>
-    <feature id="F6" source="plan">Load sample data with one click so the grader can see personalized predictions immediately.</feature>
-  </userFeatures>
+  <phase id="P1" name="Setup and data models" owner="Quang Nguyen" date="2026-11-26">
+    <goal>The repository, environment, Kaggle data and data model classes are ready.</goal>
+    <steps>
+      <step n="1">The private repository already exists (github.com/nguyenphuquang1234567/study-manager). Add Ronald Han as a collaborator.</step>
+      <step n="2">Create the project layout: app.py, models.py, data_processing.py, analysis.py, visualization.py, tests/, data/, README.md.</step>
+      <step n="3">Add a .gitignore containing .venv/, __pycache__/, .pytest_cache/, data/study_log.csv and data/grades.csv (the user's own files are created by the app, not committed).</step>
+      <step n="4">Create a virtual environment. Write requirements.txt with streamlit, pandas, numpy, scipy, matplotlib, pytest, and install them.</step>
+      <step n="5">Write pytest.ini containing "[pytest]" and "pythonpath = ." so the tests can import the modules.</step>
+      <step n="6">Download dataset_study.csv from Kaggle (andreylss/study-hours-vs-grades-dataset, MIT license) into data/. Check: columns student_id, study_hours, grade; 5000 rows; no missing values. Write down the real min and max of study_hours (the data card says 0-12, the histogram shows 0-10).</step>
+      <step n="7">In models.py, write the exception classes: StudyManagerError (base), InvalidEntryError, DataFileError, InsufficientDataError.</step>
+      <step n="8">In models.py, write the StudySession dataclass (date, course, hours, note). validate() raises InvalidEntryError for an empty course, hours of 0 or less or above 24, or a future date. to_dict() returns one row for study_log.csv.</step>
+      <step n="9">In models.py, write the GradeRecord dataclass (date, course, assessment_type, assessment_name, score). validate() raises InvalidEntryError for empty text, a type other than quiz or exam, a score outside 0-100, or a future date. to_dict() returns one row for grades.csv.</step>
+    </steps>
+    <doneWhen>
+      <check>pip install -r requirements.txt works in a new virtual environment.</check>
+      <check>StudySession with hours -1 raises InvalidEntryError; GradeRecord with score 100 is accepted.</check>
+      <check>Everything is committed and pushed.</check>
+    </doneWhen>
+  </phase>
 
-  <!-- ============================================================ -->
-  <!-- 3. CHANGES FROM THE PROPOSAL                                  -->
-  <!--    (the instructions allow the proposal to change)            -->
-  <!-- ============================================================ -->
-  <deviationsFromProposal>
-    <change id="D1" reason="Required component 3 (OOP) was not mentioned in the proposal">
-      Add student-designed classes: StudySession, GradeRecord, StudyTracker, GradePredictor.
-    </change>
-    <change id="D2" reason="Individual technical contribution and reflection are graded per person">
-      Replace "both members work on all components" with a clear owner for each module
-      (see teamResponsibilities). Both members still review and integrate each other's work.
-    </change>
-    <change id="D3" reason="The proposal did not define how the prediction becomes personalized">
-      Define a tiered model: per-course regression, then all-courses regression on the user's
-      own data, then the Kaggle baseline (see advancedComponent).
-    </change>
-    <change id="D4" reason="The Kaggle dataset measures total hours per exam, while the user logs individual sessions">
-      Sum each course's study sessions into the next assessment of that course before fitting.
-    </change>
-    <change id="D5" reason="Required components 5 and 10">
-      Add pytest, NumPy, a README, and requirements.txt to the expected libraries and deliverables.
-    </change>
-  </deviationsFromProposal>
+  <phase id="P2" name="Data processing with Pandas" owner="Quang Nguyen" date="2026-11-27">
+    <goal>User data can be loaded, cleaned, saved and summarized.</goal>
+    <steps>
+      <step n="1">In data_processing.py, write load_csv(path, required_columns). A missing file is created with headers and returns an empty DataFrame. Pandas EmptyDataError or ParserError becomes DataFileError. A missing required column raises DataFileError.</step>
+      <step n="2">In load_csv, convert dates with pd.to_datetime(errors="coerce") and numbers with pd.to_numeric(errors="coerce"), drop the rows that failed, and return how many were dropped.</step>
+      <step n="3">Write save_csv(df, path), saving without the index.</step>
+      <step n="4">Write the StudyTracker class. It loads data/study_log.csv (date, course, hours, note) and data/grades.csv (date, course, assessment_type, assessment_name, score), keeps a skipped_rows count, and has add_session() and add_grade(), which take a validated dataclass, append it with pd.concat and save.</step>
+      <step n="5">Add StudyTracker.courses() (sorted set of course names), hours_by_course() (groupby course: total hours, session count, average session length), weekly_hours() (pd.Grouper with freq "W") and summary_stats() (totals, averages, and the hours-vs-score correlation when there are 3 or more points).</step>
+      <step n="6">Add StudyTracker.hours_per_assessment(): pd.merge_asof(sessions, grades, on="date", by="course", direction="forward") assigns each study session to the next assessment of the same course; then groupby and sum to get total hours per assessment. This matches the meaning of study_hours in the Kaggle data.</step>
+      <step n="7">Add StudyTracker.hours_since_last_assessment(course): the hours not yet assigned to any assessment.</step>
+      <step n="8">Create data/sample_study_log.csv (about 30 sessions across 2 courses) and data/sample_grades.csv (about 10 assessments: at least 5 in one course and 2-3 in the other). Add load_sample_data(), which copies them over the user files.</step>
+      <step n="9">Check one assessment by hand: add up its sessions on paper and compare with hours_per_assessment().</step>
+    </steps>
+    <doneWhen>
+      <check>From a Python shell, the sample data loads and hours_per_assessment() returns the expected table.</check>
+      <check>The hand calculation matches.</check>
+      <check>Everything is committed and pushed.</check>
+    </doneWhen>
+  </phase>
 
-  <!-- ============================================================ -->
-  <!-- 4. DATA SOURCES (requirement 6)                               -->
-  <!-- ============================================================ -->
-  <dataSources>
-    <dataSource id="DS1" type="csv" file="data/dataset_study.csv" role="baseline model"
-                origin="https://www.kaggle.com/datasets/andreylss/study-hours-vs-grades-dataset"
-                license="MIT" size="about 83 kB, 5000 rows">
-      <columns>
-        <column name="student_id" type="int" description="Unique id, 1-5000"/>
-        <column name="study_hours" type="float" description="Total hours spent studying for the exam"/>
-        <column name="grade" type="float" description="Final exam score, 0-100"/>
-      </columns>
-      <notes>
-        <note>Synthetic data: generated in R as grade = 40 + 5 * study_hours + Normal(0, 10), clipped to 0-100. State this in the README.</note>
-        <note>The data card says hours range 0-12, but the column histogram shows 0-10. Read the real min and max from the file at runtime; never hard-code the range.</note>
-        <note>Include the file in data/ (MIT license allows it) and give the Kaggle URL in the README as a backup.</note>
-      </notes>
-    </dataSource>
+  <phase id="P3" name="Prediction with SciPy, then handoff" owner="Quang Nguyen" date="2026-11-28">
+    <goal>Predictions work in every case, and Ronald can build on the code without waiting for answers.</goal>
+    <steps>
+      <step n="1">In analysis.py, write the PredictionResult dataclass: predicted_score, model_used (course, personal or baseline), slope, intercept, r_squared, p_value, n_points, warnings. explanation() returns a plain sentence such as "Each extra hour is associated with +4.8 points (r squared 0.62, p = 0.01, 8 assessments)."</step>
+      <step n="2">Write GradePredictor.fit(hours, scores), which wraps scipy.stats.linregress. Raise InsufficientDataError when there are fewer than 5 points, and when all hours are identical (linregress raises ValueError in that case).</step>
+      <step n="3">Write GradePredictor.from_csv(path): load the Kaggle file with load_csv, fit the baseline, and store hours_range (min, max).</step>
+      <step n="4">Write predict(hours, course=None, personal_data=None). Negative hours raise InvalidEntryError. Use the course's own model if that course has 5 or more assessments; otherwise all of the user's assessments if there are 5 or more; otherwise the Kaggle baseline. Clip the score with np.clip(score, 0, 100). Add a warning when the hours are outside hours_range or the score was clipped.</step>
+      <step n="5">Write regression_line(model, n=100) using np.linspace, for drawing fitted lines.</step>
+      <step n="6">Check in a shell: the baseline slope is near 5 and the intercept near 40; predict(5) is about 65; predict(30) returns 100 with a warning; with the sample data, the course with 5 assessments uses "course" and the other course falls back.</step>
+      <step n="7">Add docstrings and type hints to every public class and function in models.py, data_processing.py and analysis.py.</step>
+      <step n="8">Handoff: push everything, then tell Ronald which functions each tab should call (StudyTracker methods, GradePredictor.predict, the PredictionResult fields) and how to load the sample data.</step>
+      <step n="9">Write your individual reflection now while it is fresh (150-250 words): what you built, one technical challenge (for example matching sessions to assessments with merge_asof), how you solved it, and what you learned.</step>
+    </steps>
+    <doneWhen>
+      <check>In one shell session, the sample data produces a PredictionResult from each of the three models.</check>
+      <check>Ronald confirms he can import and call everything.</check>
+      <check>Reflection written.</check>
+    </doneWhen>
+  </phase>
 
-    <dataSource id="DS2" type="csv" file="data/study_log.csv" role="user study sessions" createdBy="app on first run">
-      <columns>
-        <column name="date" type="date" format="YYYY-MM-DD" rule="not in the future"/>
-        <column name="course" type="str" rule="not empty, stripped"/>
-        <column name="hours" type="float" rule="greater than 0 and at most 24"/>
-        <column name="note" type="str" rule="optional"/>
-      </columns>
-    </dataSource>
+  <!-- ===================== RONALD HAN: P4-P6 ===================== -->
 
-    <dataSource id="DS3" type="csv" file="data/grades.csv" role="user quiz and exam scores" createdBy="app on first run">
-      <columns>
-        <column name="date" type="date" format="YYYY-MM-DD" rule="not in the future"/>
-        <column name="course" type="str" rule="not empty, stripped"/>
-        <column name="assessment_type" type="str" rule="one of: quiz, exam"/>
-        <column name="assessment_name" type="str" rule="not empty"/>
-        <column name="score" type="float" rule="between 0 and 100 inclusive"/>
-      </columns>
-    </dataSource>
+  <phase id="P4" name="Streamlit interface and charts" owner="Ronald Han" date="2026-11-29">
+    <goal>The complete user flow works in the browser.</goal>
+    <steps>
+      <step n="1">In app.py: st.set_page_config, title, sidebar, and four st.tabs (Log Study, Log Grade, Statistics, Prediction). Create the StudyTracker, and load the GradePredictor in a function cached with st.cache_resource. app.py only calls into the modules; it does no calculations itself.</step>
+      <step n="2">Log Study tab: st.form with a date (no later than today), a course (pick an existing one or type a new one), hours (0.25 to 24, step 0.25) and an optional note. On submit, build a StudySession inside try/except InvalidEntryError: show st.warning on error, otherwise save, show st.success and reload the data. Below the form, a table of sessions filterable by course.</step>
+      <step n="3">Log Grade tab: the same pattern with GradeRecord (date, course, quiz or exam, name, score), plus a table of grades.</step>
+      <step n="4">Sidebar: a "Load sample data" button that only works after ticking a confirmation checkbox, since it replaces the current data. Show the number of skipped malformed rows when it is not zero.</step>
+      <step n="5">In visualization.py, write plot_prediction (faded Kaggle points, baseline line, the user's own points highlighted, the personal line when there is one, and the predicted point) and plot_hours_by_course (bar chart). Each returns a Matplotlib Figure with a title, axis labels and a legend, and shows a message instead of an empty chart when there is no data.</step>
+      <step n="6">Statistics tab: four st.metric cards (total hours, number of sessions, average session length, average score), the per-course table and the hours-by-course chart.</step>
+      <step n="7">Prediction tab: a course selector; hours pre-filled with hours_since_last_assessment(course); the predicted score (st.metric); the model used; a table of slope, intercept, r squared, p-value and number of points; the explanation sentence; one st.warning per warning; the prediction chart.</step>
+      <step n="8">If time allows: plot_weekly_hours and plot_grade_history in the Statistics tab.</step>
+    </steps>
+    <doneWhen>
+      <check>streamlit run app.py starts without errors.</check>
+      <check>After loading the sample data and logging one session and one grade, the Statistics tab updates.</check>
+      <check>The Prediction tab shows "course" for the course with 5 assessments and a fallback model for the other course.</check>
+    </doneWhen>
+  </phase>
 
-    <dataSource id="DS4" type="csv" files="data/sample_study_log.csv, data/sample_grades.csv" role="demo data">
-      About 30 sessions and 8-10 graded assessments across 2 courses, so that at least one
-      course has enough points for a per-course regression.
-    </dataSource>
+  <phase id="P5" name="Tests and error handling" owner="Ronald Han" date="2026-11-30">
+    <goal>The logic is covered by automated tests and the app never crashes on predictable problems.</goal>
+    <steps>
+      <step n="1">tests/test_models.py: negative hours raises InvalidEntryError; score 105 raises InvalidEntryError; scores 0 and 100 are accepted.</step>
+      <step n="2">tests/test_data_processing.py, using tmp_path for every file: a CSV missing a required column raises DataFileError; missing files start empty and are created with headers; hours_by_course gives the right totals for a small known DataFrame; hours_per_assessment counts sessions between two exams only toward the second; malformed rows are dropped and counted.</step>
+      <step n="3">tests/test_analysis.py: fit on exact data y = 40 + 5x returns slope 5 and intercept 40; very high hours are clipped to 100 with a warning; identical hours raise InsufficientDataError; predict falls back from course to personal to baseline as data is removed.</step>
+      <step n="4">Run pytest and fix until all 12 tests pass.</step>
+      <step n="5">Trigger each problem in the running app; it must show a message, not a traceback: bad input in both forms; data/grades.csv deleted, filled with random text, or missing its score column; a row with hours "abc"; dataset_study.csv renamed (logging must still work and only the Prediction tab is disabled, with download instructions); a course with 1 assessment, or with identical hours; 30 hours entered for a prediction.</step>
+      <step n="6">Pin the installed versions of the six libraries in requirements.txt (from pip freeze). No new features after today.</step>
+    </steps>
+    <doneWhen>
+      <check>pytest reports 12 passed.</check>
+      <check>Every problem in step 5 was triggered and the app showed a message.</check>
+    </doneWhen>
+  </phase>
 
-    <derivedData name="hours_per_assessment">
-      <definition>
-        For each graded assessment, hours = the sum of that course's study sessions dated after
-        the previous assessment of the same course and on or before this assessment's date.
-        This matches the Kaggle meaning of study_hours (total hours for one exam).
-      </definition>
-      <implementation>
-        pd.merge_asof(sessions sorted by date, grades sorted by date, on="date", by="course",
-        direction="forward") assigns each session to the next assessment of its course; then
-        groupby the assessment and sum hours. Sessions after the last assessment are unassigned
-        and become "hours so far" for the upcoming assessment, which pre-fills the Prediction tab.
-      </implementation>
-    </derivedData>
-  </dataSources>
-
-  <!-- ============================================================ -->
-  <!-- 5. LIBRARIES                                                  -->
-  <!-- ============================================================ -->
-  <libraries pythonVersion="3.10 or newer">
-    <library name="pandas" use="load, clean, validate, aggregate, merge CSV data"/>
-    <library name="numpy" use="vectorized predictions, np.clip to 0-100, np.linspace for regression lines"/>
-    <library name="scipy" use="scipy.stats.linregress (advanced component)"/>
-    <library name="matplotlib" use="all charts, rendered with st.pyplot"/>
-    <library name="streamlit" use="user interface"/>
-    <library name="pytest" use="automated tests"/>
-    <requirementsFile>
-      List the six libraries above in requirements.txt. After the app runs, pin the exact
-      installed versions with pip freeze so the grader installs the same versions.
-    </requirementsFile>
-  </libraries>
-
-  <!-- ============================================================ -->
-  <!-- 6. ARCHITECTURE (requirement 1)                               -->
-  <!-- ============================================================ -->
-  <architecture>
-    <designRules>
-      <rule>app.py only handles the interface: no calculations, no direct file parsing.</rule>
-      <rule>All logic lives in plain modules that tests can import without Streamlit.</rule>
-      <rule>Build file paths from Path(__file__).parent so the app works from any working directory.</rule>
-      <rule>Each module has one owner to avoid merge conflicts; the other member reviews it.</rule>
-    </designRules>
-
-    <fileTree>
-      <file path="app.py" owner="shared" description="Streamlit entry point: sidebar, tabs, forms, calls into the modules"/>
-      <file path="models.py" owner="QN" description="StudySession, GradeRecord, custom exceptions"/>
-      <file path="data_processing.py" owner="QN" description="Safe CSV loading and saving, StudyTracker class, Pandas aggregations"/>
-      <file path="analysis.py" owner="RH" description="Baseline loading, GradePredictor class, PredictionResult"/>
-      <file path="visualization.py" owner="RH" description="Functions that return Matplotlib figures"/>
-      <file path="tests/test_models.py" owner="QN"/>
-      <file path="tests/test_data_processing.py" owner="QN"/>
-      <file path="tests/test_analysis.py" owner="RH"/>
-      <file path="pytest.ini" owner="QN" description="Contains: [pytest] and pythonpath = . so tests can import the modules"/>
-      <file path="data/dataset_study.csv" owner="RH"/>
-      <file path="data/sample_study_log.csv" owner="QN"/>
-      <file path="data/sample_grades.csv" owner="QN"/>
-      <file path="requirements.txt" owner="QN"/>
-      <file path="README.md" owner="shared"/>
-    </fileTree>
-
-    <interfaceContract agreeBy="2026-11-26" note="Agree on these signatures on day 1 so both members can work in parallel">
-      <function module="data_processing.py" signature="load_csv(path, required_columns) -> pd.DataFrame" raises="DataFileError"/>
-      <function module="data_processing.py" signature="StudyTracker(sessions_path, grades_path)"/>
-      <function module="data_processing.py" signature="StudyTracker.hours_per_assessment() -> pd.DataFrame" columns="course, date, assessment_type, assessment_name, score, hours"/>
-      <function module="analysis.py" signature="GradePredictor.from_csv(baseline_path) -> GradePredictor"/>
-      <function module="analysis.py" signature="GradePredictor.predict(hours, course=None, personal_data=None) -> PredictionResult"/>
-      <function module="visualization.py" signature="plot_*(...) -> matplotlib.figure.Figure"/>
-    </interfaceContract>
-  </architecture>
-
-  <!-- ============================================================ -->
-  <!-- 7. CLASSES (requirements 2 and 3)                             -->
-  <!-- ============================================================ -->
-  <classes>
-    <class name="StudySession" module="models.py" kind="dataclass" owner="QN">
-      <attributes>
-        <attribute name="date" type="datetime.date"/>
-        <attribute name="course" type="str"/>
-        <attribute name="hours" type="float"/>
-        <attribute name="note" type="str" default=""/>
-      </attributes>
-      <methods>
-        <method name="__post_init__">Strip the course name and call validate().</method>
-        <method name="validate">Raise InvalidEntryError for empty course, hours not in (0, 24], or a future date.</method>
-        <method name="to_dict">Return a dict that matches the study_log.csv columns.</method>
-      </methods>
-    </class>
-
-    <class name="GradeRecord" module="models.py" kind="dataclass" owner="QN">
-      <attributes>
-        <attribute name="date" type="datetime.date"/>
-        <attribute name="course" type="str"/>
-        <attribute name="assessment_type" type="str" values="quiz, exam"/>
-        <attribute name="assessment_name" type="str"/>
-        <attribute name="score" type="float"/>
-      </attributes>
-      <methods>
-        <method name="__post_init__">Normalize text fields and call validate().</method>
-        <method name="validate">Raise InvalidEntryError for an empty course or name, an unknown type, a score outside 0-100, or a future date.</method>
-        <method name="to_dict">Return a dict that matches the grades.csv columns.</method>
-      </methods>
-    </class>
-
-    <class name="StudyTracker" module="data_processing.py" owner="QN">
-      <attributes>
-        <attribute name="sessions" type="pd.DataFrame"/>
-        <attribute name="grades" type="pd.DataFrame"/>
-        <attribute name="sessions_path" type="pathlib.Path"/>
-        <attribute name="grades_path" type="pathlib.Path"/>
-        <attribute name="skipped_rows" type="int" description="Number of malformed rows dropped while loading"/>
-      </attributes>
-      <methods>
-        <method name="add_session(session: StudySession)">Append the row and save to CSV.</method>
-        <method name="add_grade(record: GradeRecord)">Append the row and save to CSV.</method>
-        <method name="courses() -> list[str]">Sorted unique course names from both files (uses a set).</method>
-        <method name="hours_by_course() -> pd.DataFrame">groupby course: total hours, session count, mean session length.</method>
-        <method name="weekly_hours() -> pd.DataFrame">Weekly totals with pd.Grouper(key="date", freq="W").</method>
-        <method name="hours_per_assessment() -> pd.DataFrame">The merge_asof aggregation defined in derivedData.</method>
-        <method name="hours_since_last_assessment(course) -> float">Hours not yet assigned to an assessment; pre-fills the Prediction tab.</method>
-        <method name="summary_stats() -> dict">Totals, averages, and hours-vs-score correlation (only when there are 3 or more points).</method>
-        <method name="load_sample_data()">Copy the sample CSVs into the user files.</method>
-      </methods>
-    </class>
-
-    <class name="GradePredictor" module="analysis.py" owner="RH">
-      <attributes>
-        <attribute name="baseline" type="scipy LinregressResult" description="Fitted on the Kaggle data at construction"/>
-        <attribute name="hours_range" type="tuple[float, float]" description="Min and max study_hours in the Kaggle data"/>
-        <attribute name="min_points" type="int" default="5" description="Minimum assessments needed for a personal model"/>
-      </attributes>
-      <methods>
-        <method name="from_csv(path)" kind="classmethod">Load and validate the Kaggle file, then fit the baseline.</method>
-        <method name="fit(hours, scores)" kind="staticmethod">Wrap linregress; raise InsufficientDataError when there are too few points or all hours are identical (linregress raises ValueError in that case).</method>
-        <method name="predict(hours, course=None, personal_data=None) -> PredictionResult">Try the per-course model, then the all-courses personal model, then the baseline; clip to 0-100 with numpy; add warnings.</method>
-        <method name="regression_line(model, n=100) -> tuple[np.ndarray, np.ndarray]">Points for drawing a fitted line.</method>
-      </methods>
-    </class>
-
-    <class name="PredictionResult" module="analysis.py" kind="dataclass" owner="RH">
-      <attributes>
-        <attribute name="predicted_score" type="float"/>
-        <attribute name="model_used" type="str" values="course, personal, baseline"/>
-        <attribute name="slope" type="float"/>
-        <attribute name="intercept" type="float"/>
-        <attribute name="r_squared" type="float"/>
-        <attribute name="p_value" type="float"/>
-        <attribute name="n_points" type="int"/>
-        <attribute name="warnings" type="list[str]"/>
-      </attributes>
-      <methods>
-        <method name="explanation() -> str">Plain-language sentence, for example "Each extra hour is associated with +4.8 points (r squared 0.62, p = 0.01, 8 assessments)."</method>
-      </methods>
-    </class>
-
-    <dataStructuresUsed>
-      <structure type="list">Sessions and grades before conversion to DataFrames; warning messages.</structure>
-      <structure type="dict">Row dictionaries for CSV writing; summary statistics; column schemas.</structure>
-      <structure type="set">Unique course names; allowed assessment types.</structure>
-      <structure type="tuple">Hours range (min, max); x and y arrays returned by regression_line.</structure>
-    </dataStructuresUsed>
-  </classes>
-
-  <!-- ============================================================ -->
-  <!-- 8. EXCEPTION HANDLING (requirement 4: at least 2)             -->
-  <!-- ============================================================ -->
-  <exceptionHandling>
-    <customExceptions module="models.py">
-      <exception name="StudyManagerError" base="Exception" description="Base class for the app's errors"/>
-      <exception name="InvalidEntryError" base="StudyManagerError"/>
-      <exception name="DataFileError" base="StudyManagerError"/>
-      <exception name="InsufficientDataError" base="StudyManagerError"/>
-    </customExceptions>
-
-    <errorCondition id="E1" exception="InvalidEntryError" realistic="yes">
-      <trigger>Negative or zero hours, more than 24 hours, a score outside 0-100, an empty course name, or a future date.</trigger>
-      <response>st.warning with the exact problem; nothing is saved; the form keeps its values.</response>
-    </errorCondition>
-    <errorCondition id="E2" exception="DataFileError" realistic="yes">
-      <trigger>A user CSV is missing, empty, unparseable (pandas.errors.ParserError, EmptyDataError), or missing required columns.</trigger>
-      <response>A missing user file is created with headers. A corrupt file shows st.error and the app continues with empty data instead of crashing.</response>
-    </errorCondition>
-    <errorCondition id="E3" exception="DataFileError" realistic="yes">
-      <trigger>data/dataset_study.csv is missing or wrong.</trigger>
-      <response>st.error with download instructions; logging and statistics still work; only the Prediction tab is disabled.</response>
-    </errorCondition>
-    <errorCondition id="E4" exception="InsufficientDataError" realistic="yes">
-      <trigger>Fewer than 5 graded assessments, or all assessments have identical hours.</trigger>
-      <response>Fall back to the next model tier and show which model was used.</response>
-    </errorCondition>
-    <errorCondition id="E5" exception="none (graceful handling)" realistic="yes">
-      <trigger>Malformed rows: non-numeric hours or scores, invalid dates.</trigger>
-      <response>pd.to_numeric and pd.to_datetime with errors="coerce", drop the bad rows, and show how many were skipped.</response>
-    </errorCondition>
-    <errorCondition id="E6" exception="none (graceful handling)" realistic="yes">
-      <trigger>Requested hours are outside the baseline data range, or the raw prediction exceeds 100.</trigger>
-      <response>np.clip to 0-100 and add a warning that the prediction is an extrapolation.</response>
-    </errorCondition>
-  </exceptionHandling>
-
-  <!-- ============================================================ -->
-  <!-- 9. PANDAS / NUMPY PROCESSING (requirement 7)                  -->
-  <!-- ============================================================ -->
-  <dataProcessing>
-    <operation library="pandas">read_csv with column checks; to_datetime and to_numeric with errors="coerce"; dropna to remove malformed rows.</operation>
-    <operation library="pandas">groupby("course").agg(total=sum, sessions=count, mean_length=mean) for per-course statistics.</operation>
-    <operation library="pandas">pd.Grouper(key="date", freq="W") for weekly study totals.</operation>
-    <operation library="pandas">merge_asof by course to attach sessions to assessments, then groupby and sum (hours_per_assessment).</operation>
-    <operation library="pandas">Series.corr between hours and scores; mean score per course.</operation>
-    <operation library="numpy">np.clip for score bounds; np.linspace for regression lines; vectorized predictions over arrays of hours.</operation>
-  </dataProcessing>
-
-  <!-- ============================================================ -->
-  <!-- 10. ADVANCED COMPONENT: SciPy statistical analysis            -->
-  <!-- ============================================================ -->
-  <advancedComponent category="statistical analysis using SciPy" function="scipy.stats.linregress" owner="RH">
-    <whyMeaningful>
-      The regression is the core of feature F5, not a decoration: it produces the prediction,
-      decides which model to trust, and reports how reliable that model is.
-    </whyMeaningful>
-    <modelTiers>
-      <tier order="1" name="course">Fit on the user's hours_per_assessment for the selected course when it has 5 or more points.</tier>
-      <tier order="2" name="personal">Otherwise fit on all of the user's assessments across courses when there are 5 or more points.</tier>
-      <tier order="3" name="baseline">Otherwise use the Kaggle baseline.</tier>
-    </modelTiers>
-    <outputsShown>
-      <output>Predicted score (clipped to 0-100).</output>
-      <output>Model used and number of data points.</output>
-      <output>Slope, intercept, r squared, p-value.</output>
-      <output>Plain-language explanation and any warnings.</output>
-      <output>Comparison of the personal slope with the baseline slope ("you gain more or less per hour than the baseline").</output>
-    </outputsShown>
-    <expectedBaselineResult>Slope near 5 and intercept near 40, because that is the formula that generated the Kaggle data. Use this as a sanity check, not as a finding.</expectedBaselineResult>
-  </advancedComponent>
-
-  <!-- ============================================================ -->
-  <!-- 11. VISUALIZATIONS (requirement 8: at least 2)                -->
-  <!-- ============================================================ -->
-  <visualizations module="visualization.py" owner="RH" library="matplotlib">
-    <chart id="V1" priority="MVP" tab="Prediction" function="plot_prediction">
-      Scatter of the Kaggle baseline (light, semi-transparent), the baseline regression line,
-      the user's own assessments (highlighted), the personal line when available, and the
-      predicted point.
-    </chart>
-    <chart id="V2" priority="MVP" tab="Statistics" function="plot_hours_by_course">
-      Bar chart of total study hours per course.
-    </chart>
-    <chart id="V3" priority="planned" tab="Statistics" function="plot_weekly_hours">
-      Line chart of weekly study hours over time.
-    </chart>
-    <chart id="V4" priority="planned" tab="Statistics" function="plot_grade_history">
-      Scores over time, one line per course, quizzes and exams marked differently.
-    </chart>
-    <rule>Every chart has a title, axis labels with units, and a legend when there is more than one series.</rule>
-    <rule>Every function returns a Figure and handles empty data by showing a message instead of an empty plot.</rule>
-  </visualizations>
-
-  <!-- ============================================================ -->
-  <!-- 12. USER INTERFACE (requirement 9)                            -->
-  <!-- ============================================================ -->
-  <userInterface framework="streamlit" entry="streamlit run app.py">
-    <sidebar>App title, short description, "Load sample data" button, count of skipped malformed rows if any.</sidebar>
-    <tab name="Log Study" owner="QN" features="F1, F2">
-      st.form with date, course (select existing or type new), hours, note. Below it, the session
-      table filterable by course.
-    </tab>
-    <tab name="Log Grade" owner="QN" features="F3">
-      st.form with date, course, type (quiz or exam), name, score. Below it, the grade table.
-    </tab>
-    <tab name="Statistics" owner="RH" features="F4">
-      st.metric cards (total hours, sessions, average session, average score), per-course
-      table, charts V2, V3, V4.
-    </tab>
-    <tab name="Prediction" owner="RH" features="F5">
-      Course selector, hours input pre-filled with hours since the last assessment, predicted
-      score, model used, statistics table, explanation, warnings, chart V1.
-    </tab>
-    <notes>
-      <note>Use st.cache_data for the Kaggle baseline so it loads once.</note>
-      <note>Reload data from CSV after each save so the tables and charts update on the next rerun.</note>
-      <note>Show friendly empty states ("No sessions logged yet") instead of blank charts.</note>
-    </notes>
-  </userInterface>
-
-  <!-- ============================================================ -->
-  <!-- 13. TESTING (requirement 5: at least 5, at least 1 edge/error) -->
-  <!-- ============================================================ -->
-  <testing framework="pytest" command="pytest" target="12 tests">
-    <rule>Tests cover our own logic only, never Streamlit or library behavior.</rule>
-    <rule>File tests use the tmp_path fixture so real data is never touched.</rule>
-    <test id="T1" file="tests/test_models.py" kind="error">StudySession with negative hours raises InvalidEntryError.</test>
-    <test id="T2" file="tests/test_models.py" kind="error">GradeRecord with score 105 raises InvalidEntryError.</test>
-    <test id="T3" file="tests/test_models.py" kind="edge">GradeRecord accepts the boundary scores 0 and 100.</test>
-    <test id="T4" file="tests/test_data_processing.py" kind="error">load_csv on a file missing a required column raises DataFileError.</test>
-    <test id="T5" file="tests/test_data_processing.py" kind="edge">StudyTracker with missing files starts empty and creates files with headers.</test>
-    <test id="T6" file="tests/test_data_processing.py" kind="logic">hours_by_course returns the correct totals and counts for a small known DataFrame.</test>
-    <test id="T7" file="tests/test_data_processing.py" kind="logic">hours_per_assessment assigns sessions to the correct assessment (sessions between two exams count only toward the second).</test>
-    <test id="T8" file="tests/test_data_processing.py" kind="edge">Malformed rows are dropped and counted in skipped_rows.</test>
-    <test id="T9" file="tests/test_analysis.py" kind="logic">fit on exact data y = 40 + 5x returns slope 5 and intercept 40.</test>
-    <test id="T10" file="tests/test_analysis.py" kind="edge">A prediction for very high hours is clipped to 100 and includes an extrapolation warning.</test>
-    <test id="T11" file="tests/test_analysis.py" kind="error">fit with identical hours raises InsufficientDataError.</test>
-    <test id="T12" file="tests/test_analysis.py" kind="logic">predict falls back from course to personal to baseline as data is removed, and model_used is correct each time.</test>
-  </testing>
-
-  <!-- ============================================================ -->
-  <!-- 14. DOCUMENTATION (requirement 10 and submission)             -->
-  <!-- ============================================================ -->
-  <documentation>
-    <readme file="README.md">
-      <section name="Project Description">Purpose, intended users, one screenshot.</section>
-      <section name="Features">F1-F6 in plain language.</section>
-      <section name="Data">The three CSV files, their columns, the Kaggle URL, the MIT license, and a clear note that the Kaggle data is synthetic.</section>
-      <section name="Installation">python -m venv .venv, activate it, pip install -r requirements.txt.</section>
-      <section name="How to Run">streamlit run app.py, then "Load sample data" to try predictions.</section>
-      <section name="How to Test">pytest</section>
-      <section name="Project Structure">File tree with one line per module.</section>
-      <section name="How the Prediction Works">Hours per assessment, the three model tiers, clipping, warnings.</section>
-      <section name="Team Contributions" required="yes">Major work by each member, matching teamResponsibilities below.</section>
-      <section name="Known Limitations">Synthetic baseline; small personal samples give weak p-values; correlation is not causation.</section>
-    </readme>
-    <codeDocs>Docstrings on every class and public function; type hints on function signatures.</codeDocs>
-  </documentation>
-
-  <!-- ============================================================ -->
-  <!-- 15. TEAM RESPONSIBILITIES                                     -->
-  <!-- ============================================================ -->
-  <teamResponsibilities note="Suggested split; swap areas if you prefer, but keep one clear owner per area">
-    <member ref="QN" name="Quang Nguyen" focus="data layer and logging">
-      <area>models.py: StudySession, GradeRecord, custom exceptions, validation</area>
-      <area>data_processing.py: safe CSV loading and saving, StudyTracker, Pandas aggregations including merge_asof</area>
-      <area>Streamlit tabs: Log Study, Log Grade, sample data loading</area>
-      <area>Tests T1-T8, pytest.ini, sample CSV files, requirements.txt</area>
-      <area>README: Installation, How to Run, How to Test, Project Structure</area>
-    </member>
-    <member ref="RH" name="Ronald Han" focus="analysis and presentation">
-      <area>analysis.py: baseline fit, GradePredictor, model tiers, PredictionResult</area>
-      <area>visualization.py: charts V1-V4</area>
-      <area>Streamlit tabs: Statistics, Prediction</area>
-      <area>Tests T9-T12, downloading and checking the Kaggle file</area>
-      <area>README: Features, Data, How the Prediction Works, Known Limitations</area>
-    </member>
-    <shared>
-      <area>app.py skeleton and integration</area>
-      <area>Code review of each other's modules</area>
-      <area>Fresh-environment run-through and final checklist</area>
-      <area>Team Contributions section</area>
-    </shared>
-    <individual>Each member writes their own 150-250 word reflection about their own part.</individual>
-  </teamResponsibilities>
-
-  <!-- ============================================================ -->
-  <!-- 16. PHASES (6 days to the deadline)                           -->
-  <!--     Each phase lists: goal, inputs it depends on, numbered    -->
-  <!--     steps per person, outputs, and a checkable "done when".   -->
-  <!-- ============================================================ -->
-  <phases start="2026-11-26" end="2026-12-01" featureFreeze="2026-11-30">
-
-    <!-- ========================= PHASE 1 ========================= -->
-    <phase id="P1" name="Setup and agreement" date="2026-11-26">
-      <goal>Both members can start coding in parallel the next day without waiting on each other.</goal>
-      <dependsOn>Nothing.</dependsOn>
-
-      <steps owner="shared">
-        <step n="1">Create the private GitHub repository, add both members as collaborators, and clone it on both machines.</step>
-        <step n="2">Create every file in the fileTree as an empty file, plus a .gitignore containing .venv/, __pycache__/, .pytest_cache/, data/study_log.csv and data/grades.csv (the user's personal files are created by the app, not committed).</step>
-        <step n="3">Read through the dataSources and interfaceContract sections together and agree on the exact column names and function signatures.</step>
-        <step n="4">Write every function and class in the interfaceContract as a stub with its docstring and raise NotImplementedError, so all modules import from the start.</step>
-      </steps>
-
-      <steps owner="QN" name="Quang Nguyen">
-        <step n="5">Create a virtual environment; write requirements.txt with streamlit, pandas, numpy, scipy, matplotlib, pytest; install them.</step>
-        <step n="6">Write pytest.ini with [pytest] and pythonpath = .</step>
-        <step n="7">In models.py, write the four exception classes: StudyManagerError, InvalidEntryError, DataFileError, InsufficientDataError.</step>
-        <step n="8">In models.py, write the StudySession and GradeRecord dataclasses with __post_init__, validate() and to_dict().</step>
-      </steps>
-
-      <steps owner="RH" name="Ronald Han">
-        <step n="5">Download dataset_study.csv from Kaggle into data/.</step>
-        <step n="6">In a Python shell, check: 3 columns with the expected names, 5000 rows, no missing values, and the real min and max of study_hours. Write the real range down for the README.</step>
-        <step n="7">Run scipy.stats.linregress on the full file and confirm the slope is near 5 and the intercept near 40.</step>
-      </steps>
-
-      <outputs>Repository with the full file layout and stubs, requirements.txt, pytest.ini, finished models.py, Kaggle file in data/.</outputs>
-      <doneWhen>
-        <check>Both members can clone, run pip install -r requirements.txt, and run python -c "import models, data_processing, analysis, visualization" without errors.</check>
-        <check>Creating StudySession with hours -1 in a shell raises InvalidEntryError.</check>
-        <check>data/dataset_study.csv is committed.</check>
-      </doneWhen>
-    </phase>
-
-    <!-- ========================= PHASE 2 ========================= -->
-    <phase id="P2" name="Core logic" date="2026-11-27">
-      <goal>All calculations work from a Python shell, with no interface yet.</goal>
-      <dependsOn>P1: models.py, stubs, Kaggle file.</dependsOn>
-
-      <steps owner="QN" name="Quang Nguyen" module="data_processing.py">
-        <step n="1">load_csv(path, required_columns): if the file is missing, create it with headers and return an empty DataFrame; turn pandas EmptyDataError and ParserError into DataFileError; raise DataFileError if a required column is missing.</step>
-        <step n="2">In load_csv, convert dates with pd.to_datetime(errors="coerce") and numbers with pd.to_numeric(errors="coerce"), drop the rows that failed, and report how many were dropped.</step>
-        <step n="3">save_csv(df, path) that writes without the index.</step>
-        <step n="4">StudyTracker.__init__ loads both user files; add_session and add_grade take a validated dataclass, append with pd.concat, and save.</step>
-        <step n="5">courses(), hours_by_course(), weekly_hours(), summary_stats().</step>
-        <step n="6">hours_per_assessment() with pd.merge_asof (on="date", by="course", direction="forward"), and hours_since_last_assessment(course).</step>
-        <step n="7">Create data/sample_study_log.csv (about 30 sessions, 2 courses) and data/sample_grades.csv (about 10 assessments; at least 5 in one course and 2-3 in the other, so every model tier can be shown).</step>
-        <step n="8">load_sample_data() that copies the sample files over the user files.</step>
-        <step n="9">Check one assessment by hand: add up its sessions on paper and compare with hours_per_assessment().</step>
-      </steps>
-
-      <steps owner="RH" name="Ronald Han" module="analysis.py">
-        <step n="1">PredictionResult dataclass with explanation().</step>
-        <step n="2">GradePredictor.fit(hours, scores): raise InsufficientDataError when there are fewer than min_points values; catch the ValueError that linregress raises when all hours are identical and raise InsufficientDataError instead.</step>
-        <step n="3">GradePredictor.from_csv(path): load the Kaggle file, fit the baseline, store hours_range. Until Quang's load_csv is finished, use pd.read_csv and switch over at the end of the day.</step>
-        <step n="4">predict(hours, course, personal_data): reject negative hours with InvalidEntryError; try the course model, then the personal model, then the baseline; clip with np.clip(score, 0, 100); add a warning when hours are outside hours_range or the score was clipped.</step>
-        <step n="5">regression_line(model, n=100) using np.linspace.</step>
-        <step n="6">Check in a shell: baseline predict(5) is about 65; predict(30) returns 100 with a warning; with the sample data, the 5-assessment course uses model "course" and the other course falls back to "personal" or "baseline".</step>
-      </steps>
-
-      <outputs>Working data_processing.py and analysis.py; sample CSV files.</outputs>
-      <doneWhen>
-        <check>From one Python shell session: load the sample data, print hours_per_assessment(), and get a PredictionResult from each of the three tiers.</check>
-        <check>The hand-checked assessment from QN step 9 matches.</check>
-      </doneWhen>
-    </phase>
-
-    <!-- ========================= PHASE 3 ========================= -->
-    <phase id="P3" name="Interface and charts" date="2026-11-28">
-      <goal>The complete user flow works in the browser.</goal>
-      <dependsOn>P2: StudyTracker and GradePredictor.</dependsOn>
-
-      <steps owner="shared" module="app.py">
-        <step n="1">Write the skeleton together first: st.set_page_config, title, sidebar, four st.tabs (Log Study, Log Grade, Statistics, Prediction), create the StudyTracker, and load the GradePredictor through a function decorated with st.cache_data or st.cache_resource. Each person then fills in their own tabs as separate functions to avoid editing the same lines.</step>
-      </steps>
-
-      <steps owner="QN" name="Quang Nguyen">
-        <step n="2">Log Study tab: st.form with st.date_input (max value today), course chosen from existing courses or typed as new, st.number_input for hours (0.25 to 24, step 0.25), optional note.</step>
-        <step n="3">On submit, build a StudySession inside try/except InvalidEntryError: show st.warning on error, otherwise save, show st.success and reload the data.</step>
-        <step n="4">Under the form: course filter (All or one course) and an st.dataframe of sessions, newest first.</step>
-        <step n="5">Log Grade tab: same pattern with GradeRecord (date, course, quiz or exam, name, score 0-100), plus a grade table.</step>
-        <step n="6">Sidebar: "Load sample data" button that requires ticking a confirmation checkbox first, since it replaces the current data; show the number of skipped malformed rows if it is not zero.</step>
-      </steps>
-
-      <steps owner="RH" name="Ronald Han">
-        <step n="2">visualization.py: plot_prediction (V1) and plot_hours_by_course (V2) first, each returning a Figure with title, axis labels and legend, and a message instead of an empty plot when there is no data.</step>
-        <step n="3">Statistics tab: a row of four st.metric cards (total hours, sessions, average session length, average score), the per-course table, and V2.</step>
-        <step n="4">Prediction tab: course selector, hours input pre-filled with hours_since_last_assessment(course), then show the predicted score with st.metric, the model used, a table of slope, intercept, r squared, p-value and n, the explanation sentence, one st.warning per warning, and V1.</step>
-        <step n="5">If time is left: plot_weekly_hours (V3) and plot_grade_history (V4) in the Statistics tab.</step>
-      </steps>
-
-      <outputs>Working app.py and visualization.py.</outputs>
-      <doneWhen>
-        <check>streamlit run app.py starts without errors.</check>
-        <check>Load sample data, log one new session and one new grade, and see the Statistics tab update.</check>
-        <check>The Prediction tab shows model "course" for the course with 5 or more assessments and a fallback model for the other course.</check>
-      </doneWhen>
-    </phase>
-
-    <!-- ========================= PHASE 4 ========================= -->
-    <phase id="P4" name="Error handling and tests" date="2026-11-29">
-      <goal>The app never crashes on predictable problems, and the logic is covered by automated tests.</goal>
-      <dependsOn>P2 for the tests; P3 for the manual error checks.</dependsOn>
-
-      <steps owner="QN" name="Quang Nguyen">
-        <step n="1">Write tests T1-T8 in tests/test_models.py and tests/test_data_processing.py, using tmp_path for every file.</step>
-        <step n="2">Trigger by hand in the running app and fix until nothing crashes: E1 (submit bad input in both forms), E2 (delete data/grades.csv; replace it with random text; remove its score column), E5 (add a row with hours "abc").</step>
-      </steps>
-
-      <steps owner="RH" name="Ronald Han">
-        <step n="1">Write tests T9-T12 in tests/test_analysis.py.</step>
-        <step n="2">Trigger by hand and fix: E3 (rename dataset_study.csv: logging must still work, only Prediction is disabled), E4 (a course with 1 assessment; a course where every assessment has the same hours), E6 (enter 30 hours).</step>
-        <step n="3">Finish V3 and V4 if they were not done in P3.</step>
-      </steps>
-
-      <steps owner="shared">
-        <step n="3">Each member reads the other's modules and leaves comments; fix what is found.</step>
-        <step n="4">Run pytest and fix until all tests pass.</step>
-      </steps>
-
-      <outputs>Three test files; a short list of E1-E6 with how each was checked (reuse it in the reflections).</outputs>
-      <doneWhen>
-        <check>pytest reports 12 passed.</check>
-        <check>Each of E1-E6 was triggered by hand and the app showed a message instead of a traceback.</check>
-      </doneWhen>
-    </phase>
-
-    <!-- ========================= PHASE 5 ========================= -->
-    <phase id="P5" name="Documentation and reproducibility" date="2026-11-30" note="Feature freeze at the end of this day">
-      <goal>Someone who has never seen the project can install, run and test it using only the README.</goal>
-      <dependsOn>P4: a stable, tested app.</dependsOn>
-
-      <steps owner="QN" name="Quang Nguyen">
-        <step n="1">README sections: Installation, How to Run, How to Test, Project Structure.</step>
-        <step n="2">Pin versions: write the installed version of each of the six libraries into requirements.txt (from pip freeze).</step>
-      </steps>
-
-      <steps owner="RH" name="Ronald Han">
-        <step n="1">README sections: Project Description (with one screenshot), Features, Data (Kaggle URL, MIT license, synthetic-data note, real hours range), How the Prediction Works, Known Limitations.</step>
-      </steps>
-
-      <steps owner="shared">
-        <step n="3">Write the Team Contributions section from teamResponsibilities, updated to what each person actually did.</step>
-        <step n="4">Clean up: docstrings on every class and public function, type hints, no leftover print statements or commented-out code.</step>
-        <step n="5">Fresh-clone test: clone the repository into a new folder, create a new virtual environment, follow only the README, run the app and pytest. Fix anything that breaks and repeat.</step>
-      </steps>
-
-      <outputs>Complete README.md; pinned requirements.txt.</outputs>
-      <doneWhen>
-        <check>The fresh-clone test passes with no steps outside the README.</check>
-        <check>No new features are added after this phase; only bug fixes.</check>
-      </doneWhen>
-    </phase>
-
-    <!-- ========================= PHASE 6 ========================= -->
-    <phase id="P6" name="Reflection and submission" date="2026-12-01" note="Also the buffer day for anything that slipped">
-      <goal>Everything in the submissionChecklist is submitted before the end of the day.</goal>
-      <dependsOn>P5.</dependsOn>
-
-      <steps owner="QN" name="Quang Nguyen">
-        <step n="1">Write the individual reflection (150-250 words) about the data layer and logging tabs, answering the four questions in reflectionGuide; check the word count.</step>
-      </steps>
-
-      <steps owner="RH" name="Ronald Han">
-        <step n="1">Write the individual reflection (150-250 words) about the analysis, charts and prediction tab, answering the four questions in reflectionGuide; check the word count.</step>
-      </steps>
-
-      <steps owner="shared">
-        <step n="2">Run pytest and the app one last time from the final commit.</step>
-        <step n="3">Tick every item in submissionChecklist.</step>
-        <step n="4">Submit in the format the instructor asks for (zip or repository link) and confirm the submission went through.</step>
-      </steps>
-
-      <doneWhen>
-        <check>Submission confirmed before the end of 2026-12-01.</check>
-      </doneWhen>
-    </phase>
-  </phases>
-
-  <!-- ============================================================ -->
-  <!-- 17. MVP AND STRETCH GOALS                                     -->
-  <!-- ============================================================ -->
-  <scope>
-    <mvp description="From the proposal, plus the required components">
-      <item>Log study sessions and grades with validation, saved to CSV (F1, F3).</item>
-      <item>Statistics with per-course totals and averages (F2, F4).</item>
-      <item>Prediction with the three model tiers and regression statistics (F5).</item>
-      <item>Charts V1 and V2.</item>
-      <item>At least 5 passing tests and at least 2 handled error conditions.</item>
-      <item>README with Team Contributions, requirements.txt, data included.</item>
-    </mvp>
-    <stretch cutFirst="yes">
-      <item>Charts V3 and V4 (planned, but the first to cut).</item>
-      <item>Edit or delete a logged entry.</item>
-      <item>Weekly study-hour goal per course with progress bar.</item>
-      <item>95 percent prediction interval around the predicted score.</item>
-      <item>Upload your own CSV instead of using the form.</item>
-    </stretch>
-  </scope>
-
-  <!-- ============================================================ -->
-  <!-- 18. RISKS                                                     -->
-  <!-- ============================================================ -->
-  <risks>
-    <risk id="RK1" issue="Kaggle data is synthetic, so the baseline only recovers its generating formula">Say so in the README; make the personal model the main analysis.</risk>
-    <risk id="RK2" issue="Predictions above 100 or for hours outside the data range">np.clip plus an extrapolation warning (E6, T10).</risk>
-    <risk id="RK3" issue="User session hours and Kaggle exam hours mean different things">hours_per_assessment sums sessions per assessment (T7).</risk>
-    <risk id="RK4" issue="Too few personal data points">Tiered fallback and a visible n_points (E4, T12).</risk>
-    <risk id="RK5" issue="Streamlit reruns the whole script on every interaction">Keep logic in modules, reload data after saves, cache the baseline.</risk>
-    <risk id="RK6" issue="Relative paths break when the app runs from another folder">Build paths from Path(__file__).parent.</risk>
-    <risk id="RK7" issue="Only 6 days left">Feature freeze on 2026-11-30; stretch items are cut first.</risk>
-  </risks>
-
-  <!-- ============================================================ -->
-  <!-- 19. REQUIREMENTS TRACEABILITY                                 -->
-  <!-- ============================================================ -->
-  <requirementsTraceability>
-    <requirement id="R1" name="Python program organization" points="15 (design and organization)">Separate modules with single responsibilities (architecture); no logic in app.py.</requirement>
-    <requirement id="R2" name="Python data structures">Lists, dicts, sets, and tuples as listed in dataStructuresUsed.</requirement>
-    <requirement id="R3" name="Object-oriented programming">StudySession, GradeRecord, StudyTracker, GradePredictor, PredictionResult.</requirement>
-    <requirement id="R4" name="Exception handling (at least 2)" points="10 (shared with testing)">Six conditions E1-E6 with four custom exception classes.</requirement>
-    <requirement id="R5" name="Testing (at least 5, at least 1 edge or error case)" points="10 (shared with exceptions)">Twelve pytest tests T1-T12, including 4 error and 4 edge cases.</requirement>
-    <requirement id="R6" name="Data source">Three CSV sources DS1-DS3 plus sample data DS4.</requirement>
-    <requirement id="R7" name="NumPy or Pandas, meaningful use" points="10">groupby, Grouper, merge_asof, coerce-and-drop cleaning, corr, np.clip, np.linspace.</requirement>
-    <requirement id="R8" name="At least 2 visualizations" points="15 (shared with interface)">V1 and V2 in the MVP; V3 and V4 planned.</requirement>
-    <requirement id="R9" name="User interface" points="15 (shared with visualization)">Streamlit app with four tabs.</requirement>
-    <requirement id="R10" name="README documentation" points="5">All sections listed in documentation, including install, run, and features.</requirement>
-    <requirement id="ADV" name="Advanced component" points="10">SciPy linregress with three model tiers, reported statistics, and plain-language explanation.</requirement>
-    <requirement id="TEAM" name="Team Contributions section" points="5">README section matching teamResponsibilities.</requirement>
-    <requirement id="IND" name="Individual technical contribution" points="5">One clear owner per module, as listed in teamResponsibilities and the fileTree.</requirement>
-    <requirement id="REF" name="Individual reflection, 150-250 words" points="5">One per member, written in phase P6, covering the four required questions.</requirement>
-    <requirement id="FUNC" name="Functionality and correctness" points="20">Manual error checks in phase P4 and the fresh-clone test in phase P5.</requirement>
-  </requirementsTraceability>
-
-  <!-- ============================================================ -->
-  <!-- 20. REFLECTION GUIDE                                          -->
-  <!-- ============================================================ -->
-  <reflectionGuide length="150-250 words" perspective="your own work only, not the team's">
-    <question>What part of the project did you personally contribute?</question>
-    <question>What technical challenge did you encounter?</question>
-    <question>How did you address that challenge?</question>
-    <question>What did you learn from completing the project?</question>
-    <tip>Pick one concrete challenge from your own module, for example matching sessions to assessments with merge_asof (QN) or handling the identical-hours case in linregress (RH).</tip>
-  </reflectionGuide>
-
-  <!-- ============================================================ -->
-  <!-- 21. SUBMISSION CHECKLIST (due 2026-12-01, end of day)         -->
-  <!-- ============================================================ -->
-  <submissionChecklist>
-    <item>Complete Python source code (app.py, models.py, data_processing.py, analysis.py, visualization.py).</item>
-    <item>README.md with every section, including Team Contributions.</item>
-    <item>requirements.txt with pinned versions.</item>
-    <item>Project data in data/ (dataset_study.csv and the sample files) plus the Kaggle URL in the README.</item>
-    <item>Automated tests in tests/, and pytest passes.</item>
-    <item>Streamlit application starts with streamlit run app.py.</item>
-    <item>Team contribution statement.</item>
-    <item>Individual reflection from Quang Nguyen.</item>
-    <item>Individual reflection from Ronald Han.</item>
-    <item>Final check: the project runs from a fresh clone using only the README instructions.</item>
-  </submissionChecklist>
+  <phase id="P6" name="README and submission" owner="Ronald Han" date="2026-12-01">
+    <goal>The project is documented, runs from a fresh clone, and is submitted before the end of the day.</goal>
+    <steps>
+      <step n="1">README.md sections: Project Description (with one screenshot); Features; Data (the three CSV files and their columns, the Kaggle URL, the MIT license, and a note that the Kaggle data is synthetic, generated as grade = 40 + 5 x hours + random noise); Installation (python -m venv .venv, activate it, pip install -r requirements.txt); How to Run (streamlit run app.py, then Load sample data); How to Test (pytest); Project Structure; How the Prediction Works; Known Limitations.</step>
+      <step n="2">README section titled "Team Contributions": Quang Nguyen - setup, data models and validation, data processing with Pandas, SciPy prediction (P1-P3). Ronald Han - Streamlit interface, visualizations, tests and error handling, documentation (P4-P6).</step>
+      <step n="3">Fresh-clone test: clone the repository into a new folder, create a new virtual environment, follow only the README, and run the app and pytest. Fix anything that breaks.</step>
+      <step n="4">Write your individual reflection (150-250 words): what you built, one technical challenge, how you solved it, and what you learned.</step>
+      <step n="5">Final check that the submission contains: all source code, README.md, requirements.txt, the data files, passing tests, a working Streamlit app, the Team Contributions section, and both reflections.</step>
+      <step n="6">Submit in the format the instructor asks for (zip or repository link) and confirm it went through.</step>
+    </steps>
+    <doneWhen>
+      <check>Submission confirmed before the end of 2026-12-01.</check>
+    </doneWhen>
+  </phase>
 
 </projectPlan>
