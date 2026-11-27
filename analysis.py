@@ -1,13 +1,4 @@
-"""Score prediction with SciPy linear regression.
-
-Three models are tried in order, and the first one with enough data is used:
-    1. "course"   - the user's own assessments in the selected course
-    2. "personal" - all of the user's assessments, across courses
-    3. "baseline" - the Kaggle dataset (5000 synthetic students)
-
-Each model is a straight line, score = intercept + slope * hours, fitted with
-scipy.stats.linregress on total study hours per assessment.
-"""
+"""Score prediction with SciPy linear regression (course -> personal -> Kaggle baseline)."""
 
 from __future__ import annotations
 
@@ -26,55 +17,37 @@ from models import MAX_SCORE, MIN_SCORE, DataFileError, InsufficientDataError, I
 BASELINE_PATH: Path = DATA_DIR / "dataset_study.csv"
 BASELINE_COLUMNS: tuple[str, ...] = ("student_id", "study_hours", "grade")
 KAGGLE_URL: str = "https://www.kaggle.com/datasets/andreylss/study-hours-vs-grades-dataset"
-MIN_POINTS: int = 5
+MIN_POINTS: int = 5  # assessments needed before a personal model is used
 SIGNIFICANCE_LEVEL: float = 0.05
 
 
 @dataclass(frozen=True)
 class LinearModel:
-    """A fitted line: score = intercept + slope * hours.
+    """A fitted line: score = intercept + slope * hours."""
 
-    Attributes:
-        name: "course", "personal" or "baseline".
-        slope: Points gained per extra hour of study.
-        intercept: Predicted score at 0 hours.
-        r_squared: Share of score variation explained by hours (0 to 1).
-        p_value: Probability of a slope this far from 0 if there were no real trend.
-        n_points: Number of data points used.
-        hours_range: (min, max) hours in the data the model was fitted on.
-    """
-
-    name: str
+    name: str  # "course", "personal" or "baseline"
     slope: float
     intercept: float
     r_squared: float
     p_value: float
     n_points: int
-    hours_range: tuple[float, float]
+    hours_range: tuple[float, float]  # (min, max) hours in the fitted data
 
     def predict_raw(self, hours: float | np.ndarray) -> float | np.ndarray:
-        """Unclipped prediction for one value or an array of hours."""
+        """Prediction without clipping, for a number or an array."""
         result = self.intercept + self.slope * np.asarray(hours, dtype=float)
         return float(result) if result.ndim == 0 else result
 
 
 @dataclass
 class PredictionResult:
-    """The outcome of GradePredictor.predict.
-
-    Attributes:
-        hours: Study hours the prediction is for.
-        predicted_score: Predicted score, clipped to 0-100.
-        model: The LinearModel that produced the prediction.
-        warnings: Reasons to be careful with this prediction (show as warnings).
-        notes: Why a model was skipped, if any (show as information).
-    """
+    """Result of GradePredictor.predict."""
 
     hours: float
-    predicted_score: float
+    predicted_score: float  # clipped to 0-100
     model: LinearModel
-    warnings: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)  # reasons to be careful
+    notes: list[str] = field(default_factory=list)  # why a model was skipped
 
     @property
     def model_used(self) -> str:
@@ -101,7 +74,7 @@ class PredictionResult:
         return self.model.n_points
 
     def explanation(self) -> str:
-        """A plain-language summary of the prediction and the model behind it."""
+        """Plain-language summary of the prediction."""
         sources = {
             "course": f"your {self.n_points} graded assessments in this course",
             "personal": f"all {self.n_points} of your graded assessments",
@@ -122,14 +95,7 @@ class PredictionResult:
 
 
 class GradePredictor:
-    """Predicts a quiz or exam score from study hours.
-
-    Attributes:
-        baseline_data: Kaggle rows (study_hours, grade); useful for charts.
-        baseline: LinearModel fitted on baseline_data.
-        hours_range: (min, max) study hours in the Kaggle data.
-        min_points: Graded assessments needed before a personal model is used.
-    """
+    """Predicts a quiz or exam score from study hours."""
 
     def __init__(self, baseline_data: pd.DataFrame, min_points: int = MIN_POINTS) -> None:
         if min_points < 3:
@@ -146,12 +112,7 @@ class GradePredictor:
 
     @classmethod
     def from_csv(cls, path: str | Path = BASELINE_PATH, min_points: int = MIN_POINTS) -> GradePredictor:
-        """Load the Kaggle file and fit the baseline model.
-
-        Raises:
-            DataFileError: if the file is missing, unreadable, or has too few usable
-                rows. The message says where to download it.
-        """
+        """Load the Kaggle file and fit the baseline; raises DataFileError."""
         try:
             data, _ = load_csv(path, BASELINE_COLUMNS, numeric_columns=("study_hours", "grade"))
         except DataFileError as exc:
@@ -173,18 +134,12 @@ class GradePredictor:
         name: str = "custom",
         min_points: int = MIN_POINTS,
     ) -> LinearModel:
-        """Fit score = intercept + slope * hours with scipy.stats.linregress.
-
-        Pairs where either value is missing are ignored.
-
-        Raises:
-            InsufficientDataError: with fewer than min_points pairs, or when every
-                hours value is the same (no trend can be measured).
-        """
+        """Fit a line with scipy.stats.linregress; raises InsufficientDataError."""
         x = np.asarray(list(hours), dtype=float)
         y = np.asarray(list(scores), dtype=float)
         if x.shape != y.shape:
             raise ValueError("hours and scores must have the same length.")
+        # Ignore pairs with a missing value.
         keep = np.isfinite(x) & np.isfinite(y)
         x, y = x[keep], y[keep]
 
@@ -197,6 +152,7 @@ class GradePredictor:
             raise InsufficientDataError(
                 "Every data point has the same study hours, so no trend can be measured."
             )
+        # Least-squares line through the points.
         try:
             result = stats.linregress(x, y)
         except ValueError as exc:  # scipy raises this when all x values are identical
@@ -205,8 +161,7 @@ class GradePredictor:
         r_squared = float(result.rvalue) ** 2
         p_value = float(result.pvalue)
         if np.ptp(y) == 0:
-            # Every score is the same: scipy returns NaN for r and p. The fitted line
-            # is flat, so report that hours explain nothing and show no evidence of a trend.
+            # All scores equal: scipy gives NaN, so report no fit and no trend.
             r_squared, p_value = 0.0, 1.0
 
         return LinearModel(
@@ -225,18 +180,7 @@ class GradePredictor:
         course: str | None = None,
         personal_data: pd.DataFrame | None = None,
     ) -> PredictionResult:
-        """Predict the score for a number of study hours.
-
-        Args:
-            hours: Total hours studied for the assessment (0 or more).
-            course: Course to try a course-only model for; None skips that model.
-            personal_data: Output of StudyTracker.hours_per_assessment()
-                (needs columns course, hours, score). None or empty means
-                only the baseline can be used.
-
-        Raises:
-            InvalidEntryError: if hours is not a number or is negative.
-        """
+        """Predict the score for some study hours (personal_data = hours_per_assessment())."""
         try:
             hours_value = float(hours)
         except (TypeError, ValueError):
@@ -244,10 +188,12 @@ class GradePredictor:
         if not math.isfinite(hours_value) or hours_value < 0:
             raise InvalidEntryError(f"Hours must be 0 or more, got {hours}.")
 
+        # Pick a model, plug in the hours, keep the score within 0-100.
         model, notes = self._choose_model(course, personal_data)
         raw_score = float(model.predict_raw(hours_value))
         score = float(np.clip(raw_score, MIN_SCORE, MAX_SCORE))
 
+        # Flag anything that makes this prediction less reliable.
         warnings: list[str] = []
         low, high = model.hours_range
         if not low <= hours_value <= high:
@@ -277,7 +223,7 @@ class GradePredictor:
     def _choose_model(
         self, course: str | None, personal_data: pd.DataFrame | None
     ) -> tuple[LinearModel, list[str]]:
-        """Return the first model that can be fitted, plus notes on skipped models."""
+        """Return the first model with enough data, plus notes on skipped models."""
         notes: list[str] = []
         if personal_data is None or len(personal_data) == 0:
             notes.append("Using the Kaggle baseline because there are no graded assessments yet.")
@@ -287,6 +233,7 @@ class GradePredictor:
         if missing:
             raise ValueError(f"personal_data is missing column(s): {', '.join(sorted(missing))}.")
 
+        # 1. The selected course only.
         if course is not None:
             course_rows = personal_data[personal_data["course"] == course]
             try:
@@ -297,6 +244,7 @@ class GradePredictor:
             except InsufficientDataError as exc:
                 notes.append(f"A {course}-only model was not used. {exc}")
 
+        # 2. All of the user's assessments, across courses.
         try:
             model = self.fit(
                 personal_data["hours"], personal_data["score"], name="personal", min_points=self.min_points
@@ -305,6 +253,7 @@ class GradePredictor:
         except InsufficientDataError as exc:
             notes.append(f"A model of all your assessments was not used. {exc}")
 
+        # 3. Not enough personal data: use the Kaggle baseline.
         notes.append("Using the Kaggle baseline instead.")
         return self.baseline, notes
 
@@ -314,14 +263,7 @@ class GradePredictor:
         n: int = 100,
         hours_range: tuple[float, float] | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Points for drawing a model's line, clipped to 0-100.
-
-        Args:
-            model: The model to draw.
-            n: Number of points.
-            hours_range: (start, end) hours; defaults to the model's own data range.
-                Pass a wider range to extend the line to a predicted point.
-        """
+        """Points for drawing a model's line, clipped to 0-100."""
         low, high = hours_range if hours_range is not None else model.hours_range
         x = np.linspace(low, high, n)
         y = np.clip(model.predict_raw(x), MIN_SCORE, MAX_SCORE)

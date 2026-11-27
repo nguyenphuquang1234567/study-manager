@@ -1,8 +1,4 @@
-"""Data models and custom exceptions for Study Manager.
-
-StudySession and GradeRecord validate themselves when they are created, so any
-instance that exists is known to be valid and safe to save.
-"""
+"""Data models and custom exceptions for Study Manager."""
 
 from __future__ import annotations
 
@@ -10,6 +6,7 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import Any
 
+# Limits used to validate entries and to clean rows loaded from CSV.
 ASSESSMENT_TYPES: frozenset[str] = frozenset({"quiz", "exam"})
 MAX_SESSION_HOURS: float = 24.0
 MIN_SCORE: float = 0.0
@@ -17,27 +14,23 @@ MAX_SCORE: float = 100.0
 
 
 class StudyManagerError(Exception):
-    """Base class for every error raised by Study Manager."""
+    """Base class for all app errors."""
 
 
 class InvalidEntryError(StudyManagerError):
-    """A study session, grade, or prediction input contains an invalid value."""
+    """Invalid value in a session, grade, or prediction input."""
 
 
 class DataFileError(StudyManagerError):
-    """A CSV file is missing, unreadable, or does not have the expected columns."""
+    """CSV file is missing, unreadable, or missing columns."""
 
 
 class InsufficientDataError(StudyManagerError):
-    """There is not enough usable data to fit a regression model."""
+    """Not enough data to fit a regression."""
 
 
 def _to_date(value: Any) -> dt.date:
-    """Convert a date, datetime, or ISO string (YYYY-MM-DD) to a date.
-
-    Raises:
-        InvalidEntryError: if the value cannot be read as a date.
-    """
+    """Convert a date, datetime, or YYYY-MM-DD string to a date."""
     if isinstance(value, dt.datetime):
         return value.date()
     if isinstance(value, dt.date):
@@ -51,7 +44,7 @@ def _to_date(value: Any) -> dt.date:
 
 
 def _to_float(value: Any, field_name: str) -> float:
-    """Convert a value to float, raising InvalidEntryError instead of TypeError/ValueError."""
+    """Convert to float or raise InvalidEntryError."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -65,14 +58,7 @@ def _check_not_future(day: dt.date) -> None:
 
 @dataclass
 class StudySession:
-    """One block of time spent studying for a course.
-
-    Attributes:
-        date: Day the session took place (not in the future).
-        course: Course name, for example "Calculus".
-        hours: Length of the session, greater than 0 and at most 24.
-        note: Optional free-text note.
-    """
+    """One study session: date, course, hours (0-24], optional note."""
 
     date: dt.date
     course: str
@@ -80,6 +66,7 @@ class StudySession:
     note: str = ""
 
     def __post_init__(self) -> None:
+        # Convert inputs to the right types, then check them.
         self.date = _to_date(self.date)
         self.course = str(self.course).strip()
         self.hours = _to_float(self.hours, "Hours")
@@ -87,11 +74,7 @@ class StudySession:
         self.validate()
 
     def validate(self) -> None:
-        """Check every field.
-
-        Raises:
-            InvalidEntryError: for an empty course, hours outside (0, 24], or a future date.
-        """
+        """Raise InvalidEntryError if any field is invalid."""
         if not self.course:
             raise InvalidEntryError("Course name cannot be empty.")
         if not 0 < self.hours <= MAX_SESSION_HOURS:
@@ -101,7 +84,7 @@ class StudySession:
         _check_not_future(self.date)
 
     def to_dict(self) -> dict[str, Any]:
-        """Return one row for study_log.csv."""
+        """Row for study_log.csv."""
         return {
             "date": self.date.isoformat(),
             "course": self.course,
@@ -112,15 +95,7 @@ class StudySession:
 
 @dataclass
 class GradeRecord:
-    """The score received on one quiz or exam.
-
-    Attributes:
-        date: Day of the assessment (not in the future).
-        course: Course name; must match the name used for study sessions.
-        assessment_type: "quiz" or "exam".
-        assessment_name: Label such as "Quiz 3" or "Midterm".
-        score: Percentage score from 0 to 100.
-    """
+    """One quiz or exam result: date, course, type, name, score 0-100."""
 
     date: dt.date
     course: str
@@ -129,6 +104,7 @@ class GradeRecord:
     score: float
 
     def __post_init__(self) -> None:
+        # Convert inputs to the right types, then check them.
         self.date = _to_date(self.date)
         self.course = str(self.course).strip()
         self.assessment_type = str(self.assessment_type).strip().lower()
@@ -137,12 +113,7 @@ class GradeRecord:
         self.validate()
 
     def validate(self) -> None:
-        """Check every field.
-
-        Raises:
-            InvalidEntryError: for empty text, an unknown type, a score outside 0-100,
-                or a future date.
-        """
+        """Raise InvalidEntryError if any field is invalid."""
         if not self.course:
             raise InvalidEntryError("Course name cannot be empty.")
         if not self.assessment_name:
@@ -159,7 +130,7 @@ class GradeRecord:
         _check_not_future(self.date)
 
     def to_dict(self) -> dict[str, Any]:
-        """Return one row for grades.csv."""
+        """Row for grades.csv."""
         return {
             "date": self.date.isoformat(),
             "course": self.course,
